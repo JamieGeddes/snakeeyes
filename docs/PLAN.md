@@ -64,7 +64,10 @@ Every input source emits `{ target, confidence, commands }`, so voice plugs in w
 
 1. Scaffold: Vite, TypeScript, Vitest, ESLint, Prettier.
 2. Playable game with debug mouse input: steering, fruit, growth, wrap, tail trimming, score, local high score.
-3. Tracking spike: landmarks and debug overlay on the target Mac; measure FPS. Go/no-go checkpoint.
+3. Tracking spike: landmarks and debug overlay on the target Mac; measure FPS. Go/no-go checkpoint, using `/tracking.html`:
+   - detection rate at least 25 fps, p95 inference at most 20 ms;
+   - face found at least 95% of the time when seated normally;
+   - iris range ÷ jitter at least 10 horizontally and 6 vertically (about 150 px resolution on a ~1500×900 px screen).
 4. Gaze estimation and calibration, with unit-tested maths.
 5. Integration: gaze steering, gaze marker, auto-pause, blink filtering, tuning.
 6. Polish: visuals, generated audio, screen flow, accessibility pass.
