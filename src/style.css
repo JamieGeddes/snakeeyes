@@ -3,11 +3,71 @@ body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  background: #0d1420;
+  background: #0a101b;
+  color: #e6edf7;
+  font-family: system-ui, sans-serif;
+}
+
+body.playing {
+  cursor: none;
 }
 
 #game {
   display: block;
   width: 100vw;
   height: 100vh;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(10, 16, 27, 0.55);
+  backdrop-filter: blur(4px);
+}
+
+.overlay[hidden] {
+  display: none;
+}
+
+.panel {
+  max-width: 28rem;
+  padding: 2rem 2.5rem;
+  border-radius: 1.25rem;
+  background: rgba(22, 35, 58, 0.9);
+  box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.45);
+  text-align: center;
+}
+
+.panel h1 {
+  margin: 0 0 0.75rem;
+  font-size: 2.25rem;
+  color: #7ef0c0;
+}
+
+.panel p {
+  margin: 0 0 1.5rem;
+  line-height: 1.5;
+}
+
+.panel button {
+  padding: 0.75rem 2rem;
+  border: 0;
+  border-radius: 999px;
+  background: #7ef0c0;
+  color: #0a101b;
+  font:
+    600 1.1rem system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+
+.panel button:focus-visible {
+  outline: 3px solid #e6edf7;
+  outline-offset: 3px;
+}
+
+.panel button[hidden] {
+  display: none;
 }

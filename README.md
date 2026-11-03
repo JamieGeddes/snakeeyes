@@ -18,6 +18,17 @@ npm run dev
 
 Open the URL Vite prints (served on `localhost`, which browsers treat as secure for camera access).
 
+## Playing (current build)
+
+Eye tracking is not wired in yet. Open the dev URL with `?debug` (e.g. `http://localhost:5173/?debug`) to steer with the mouse.
+
+| Key   | Action               |
+| ----- | -------------------- |
+| Space | Start, pause, resume |
+| Esc   | Pause                |
+
+The game also pauses when the window loses focus or leaves fullscreen.
+
 ## Scripts
 
 | Command          | Purpose                                 |
