@@ -10,6 +10,9 @@
 | Gaze marker     | Faint marker shown where the player is looking                                                                        |
 | Calibration     | Every session: 9-point calibration then 4-point validation                                                            |
 | Accuracy target | Median error under 150 px after calibration (go/no-go checkpoint)                                                     |
+| Round           | Timed, 2 minutes (`roundSeconds`); 3 s countdown on start and resume                                                  |
+| Score           | Fruit currently in the snake; a tail trim removes the lost fruit's points                                             |
+| Fruit           | 3 on screen at once (`fruitCount`)                                                                                    |
 | Walls           | Wrap around to the opposite edge                                                                                      |
 | Self-collision  | Trims the tail at the crossing point; no game over                                                                    |
 | Face lost       | Auto-pause after ~0.5 s; countdown on resume                                                                          |

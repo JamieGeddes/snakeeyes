@@ -8,6 +8,13 @@
   </head>
   <body>
     <canvas id="game" aria-label="SnakeEyes game board"></canvas>
+    <div id="overlay" class="overlay" role="dialog" aria-live="polite" hidden>
+      <div class="panel">
+        <h1 data-title></h1>
+        <p data-text></p>
+        <button type="button" data-action></button>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
