@@ -1,0 +1,120 @@
+body {
+  margin: 0;
+  background: #0a101b;
+  color: #e6edf7;
+  font-family: system-ui, sans-serif;
+}
+
+.tracking {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(18rem, 1fr);
+  gap: 1rem 1.5rem;
+  max-width: 80rem;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+header {
+  grid-column: 1 / -1;
+}
+
+h1 {
+  margin: 0 0 0.25rem;
+  color: #7ef0c0;
+}
+
+h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.1rem;
+}
+
+.view {
+  position: relative;
+  grid-row: span 2;
+  align-self: start;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: #16233a;
+  aspect-ratio: 4 / 3;
+}
+
+.view video,
+.view canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  /* Mirror so it behaves like a mirror for the player. */
+  transform: scaleX(-1);
+}
+
+.panel {
+  padding: 1rem 1.25rem;
+  border-radius: 0.75rem;
+  background: #16233a;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 1rem;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+dt {
+  color: #9fb0c8;
+}
+
+dd {
+  margin: 0;
+  text-align: right;
+}
+
+dd.pass {
+  color: #7ef0c0;
+}
+
+dd.fail {
+  color: #ffb36b;
+}
+
+ol {
+  padding-left: 1.25rem;
+  line-height: 1.5;
+}
+
+.buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+button {
+  padding: 0.6rem 1.25rem;
+  border: 0;
+  border-radius: 999px;
+  background: #7ef0c0;
+  color: #0a101b;
+  font:
+    600 1rem system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+button:focus-visible {
+  outline: 3px solid #e6edf7;
+  outline-offset: 3px;
+}
+
+.hint {
+  color: #9fb0c8;
+  font-size: 0.9rem;
+}

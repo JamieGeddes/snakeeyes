@@ -29,6 +29,12 @@ Eye tracking is not wired in yet. Open the dev URL with `?debug` (e.g. `http://l
 
 The game also pauses when the window loses focus or leaves fullscreen.
 
+## Tracking check
+
+`/tracking.html` (e.g. `http://localhost:5173/tracking.html`) shows the camera with eye landmarks, detection rate, inference time, head pose and blink scores. Its signal-quality panel measures iris jitter while staring at one spot against the range covered looking edge to edge; the ratio indicates whether the accuracy target is reachable. Chrome will ask for camera permission.
+
+The face model is self-hosted in `public/models/` (see its README for source, checksum and licence). MediaPipe's WASM runtime is bundled from `node_modules`, so no requests go to Google at runtime.
+
 ## Scripts
 
 | Command          | Purpose                                 |

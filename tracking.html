@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SnakeEyes: tracking check</title>
+    <link rel="stylesheet" href="/src/debug/tracking.css" />
+  </head>
+  <body>
+    <main class="tracking">
+      <header>
+        <h1>Tracking check</h1>
+        <p>Camera frames are processed in this tab only; nothing is uploaded.</p>
+        <button type="button" id="start">Start camera</button>
+        <p id="status" role="status"></p>
+      </header>
+
+      <section class="view" aria-label="Camera preview with eye landmarks">
+        <video id="video" playsinline muted></video>
+        <canvas id="overlay"></canvas>
+      </section>
+
+      <section class="panel" aria-label="Live statistics">
+        <h2>Live</h2>
+        <dl id="stats"></dl>
+      </section>
+
+      <section class="panel" aria-label="Signal quality measurement">
+        <h2>Signal quality</h2>
+        <ol>
+          <li>Sit as you would to play, about an arm's length from the screen.</li>
+          <li>
+            <strong>Jitter:</strong> keep your head still and stare at one spot for 3 seconds.
+          </li>
+          <li>
+            <strong>Range:</strong> keep your head still and look from the far left edge of the
+            screen to the far right, then top to bottom, for 6 seconds.
+          </li>
+        </ol>
+        <div class="buttons">
+          <button type="button" id="measure-jitter" disabled>Measure jitter (3 s)</button>
+          <button type="button" id="measure-range" disabled>Measure range (6 s)</button>
+        </div>
+        <dl id="quality"></dl>
+        <p class="hint">
+          Guide: range ÷ jitter of at least 10 horizontally and 6 vertically suggests the 150 px
+          accuracy target is reachable on a typical laptop screen.
+        </p>
+      </section>
+    </main>
+    <script type="module" src="/src/debug/tracking.ts"></script>
+  </body>
+</html>
