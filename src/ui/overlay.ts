@@ -1,23 +1,26 @@
+export interface Action {
+  readonly label: string;
+  readonly run: () => void;
+}
+
 export interface Screen {
   readonly title: string;
   readonly text: string;
-  readonly action?: { readonly label: string; readonly run: () => void };
+  readonly actions?: readonly Action[];
 }
 
-/** HTML panel shown over the canvas for start, pause and game-over screens. */
+/** HTML panel shown over the canvas for start, pause, result and game-over screens. */
 export class Overlay {
   private readonly root: HTMLElement;
   private readonly title: HTMLElement;
   private readonly text: HTMLElement;
-  private readonly button: HTMLButtonElement;
-  private run: (() => void) | null = null;
+  private readonly actions: HTMLElement;
 
   constructor(root: HTMLElement) {
     this.root = root;
     this.title = query(root, '[data-title]');
     this.text = query(root, '[data-text]');
-    this.button = query<HTMLButtonElement>(root, '[data-action]');
-    this.button.addEventListener('click', () => this.run?.());
+    this.actions = query(root, '[data-actions]');
   }
 
   get visible(): boolean {
@@ -27,11 +30,16 @@ export class Overlay {
   show(screen: Screen): void {
     this.title.textContent = screen.title;
     this.text.textContent = screen.text;
-    this.run = screen.action?.run ?? null;
-    this.button.hidden = !screen.action;
-    this.button.textContent = screen.action?.label ?? '';
+    const buttons = (screen.actions ?? []).map((a) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = a.label;
+      b.addEventListener('click', a.run);
+      return b;
+    });
+    this.actions.replaceChildren(...buttons);
     this.root.hidden = false;
-    if (screen.action) this.button.focus();
+    buttons[0]?.focus();
   }
 
   hide(): void {

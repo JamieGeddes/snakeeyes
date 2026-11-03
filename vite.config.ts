@@ -11,8 +11,12 @@ export default defineConfig({
       input: {
         main: 'index.html',
         tracking: 'tracking.html',
+        gaze: 'gaze.html',
       },
     },
+  },
+  worker: {
+    format: 'es',
   },
   test: {
     include: ['src/**/*.test.ts'],

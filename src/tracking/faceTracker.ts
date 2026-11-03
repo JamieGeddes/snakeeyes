@@ -1,6 +1,7 @@
 import { FaceLandmarker } from '@mediapipe/tasks-vision';
-import wasmLoaderPath from '@mediapipe/tasks-vision/vision_wasm_internal.js?url';
-import wasmBinaryPath from '@mediapipe/tasks-vision/vision_wasm_internal.wasm?url';
+// The ES-module build of the runtime, which MediaPipe can load inside a module worker.
+import wasmLoaderPath from '@mediapipe/tasks-vision/vision_wasm_module_internal.js?url';
+import wasmBinaryPath from '@mediapipe/tasks-vision/vision_wasm_module_internal.wasm?url';
 
 /** Served from public/models; no requests go to Google's CDN. */
 const MODEL_URL = `${import.meta.env.BASE_URL}models/face_landmarker.task`;
@@ -12,12 +13,15 @@ export interface FaceTracker {
   readonly delegate: Delegate;
 }
 
-/** Loads Face Landmarker for video, preferring the GPU and falling back to the CPU. */
+/**
+ * Loads Face Landmarker for video, preferring the GPU and falling back to the CPU.
+ * Must run in a module worker (see tracker.worker.ts).
+ */
 export async function createFaceTracker(): Promise<FaceTracker> {
   const fileset = { wasmLoaderPath, wasmBinaryPath };
   const create = (delegate: Delegate): Promise<FaceLandmarker> =>
     FaceLandmarker.createFromOptions(fileset, {
-      baseOptions: { modelAssetPath: MODEL_URL, delegate },
+      baseOptions: { modelAssetPath: new URL(MODEL_URL, self.location.href).href, delegate },
       runningMode: 'VIDEO',
       numFaces: 1,
       outputFaceBlendshapes: true,

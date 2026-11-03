@@ -35,6 +35,10 @@ The game also pauses when the window loses focus or leaves fullscreen.
 
 The face model is self-hosted in `public/models/` (see its README for source, checksum and licence). MediaPipe's WASM runtime is bundled from `node_modules`, so no requests go to Google at runtime.
 
+## Gaze check
+
+`/gaze.html` runs the full calibration (9 dots, then 4 to check accuracy) and then shows a marker where it thinks you are looking, with reference crosses to test against. Press R to recalibrate.
+
 ## Scripts
 
 | Command          | Purpose                                 |
