@@ -43,6 +43,7 @@ export class GazeEstimator {
 
     const { width, height } = this.model.screen;
     const raw = predictGaze(this.model, sample.inputs);
+    if (!raw) return { point: this.last, status: 'tracking' };
     const x = clamp(raw.x, -OVERSHOOT * width, (1 + OVERSHOOT) * width);
     const y = clamp(raw.y, -OVERSHOOT * height, (1 + OVERSHOOT) * height);
     const t = sample.t / 1000;

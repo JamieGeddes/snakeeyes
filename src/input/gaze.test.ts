@@ -57,6 +57,18 @@ describe('GazeInput', () => {
     expect(input.lost(800)).toBe('eyes-closed');
   });
 
+  it('corrects drift from eaten fruit', () => {
+    const input = calibratedInput();
+    const inputs = syntheticInputs({ x: 750, y: 450 }, screen, 0, Math.random);
+    for (let t = 0; t <= 1000; t += 33) input.update({ t, inputs, blinking: false });
+    const before = input.sample().target;
+    if (!before) throw new Error('no target');
+    // The player was looking at a fruit 80 px to the right of where we think.
+    input.fruitEaten({ x: before.x + 80, y: before.y }, 1000);
+    input.update({ t: 1033, inputs, blinking: false });
+    expect((input.sample().target?.x ?? 0) - before.x).toBeCloseTo(24, 0);
+  });
+
   it('drops the target and reports no face when the face goes', () => {
     const input = calibratedInput();
     input.update({

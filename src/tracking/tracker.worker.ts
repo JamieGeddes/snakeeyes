@@ -1,6 +1,11 @@
 import type { FaceLandmarkerResult } from '@mediapipe/tasks-vision';
 import { createFaceTracker, type FaceTracker } from './faceTracker';
-import { blendshapeScore, headPoseFromMatrix, irisPosition } from './features';
+import {
+  blendshapeScore,
+  headPoseFromMatrix,
+  headTransformFromMatrix,
+  irisPosition,
+} from './features';
 import type { FaceData, FromWorker, ToWorker } from './protocol';
 
 let tracker: FaceTracker | null = null;
@@ -42,7 +47,7 @@ function toFaceData(result: FaceLandmarkerResult, aspect: number): FaceData | nu
   const data: FaceData = {
     iris: irisPosition(landmarks, aspect),
     pose: headPoseFromMatrix(matrix),
-    position: matrix.length >= 16 ? [matrix[12] ?? 0, matrix[13] ?? 0, matrix[14] ?? 0] : null,
+    head: headTransformFromMatrix(matrix),
     blink: {
       left: blendshapeScore(blend, 'eyeBlinkLeft'),
       right: blendshapeScore(blend, 'eyeBlinkRight'),
