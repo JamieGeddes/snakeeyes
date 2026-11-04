@@ -1,11 +1,14 @@
-import { CameraError, startCamera } from '../camera/camera';
+import { CameraError, openCamera, stopCamera } from '../camera/camera';
+import { CameraChoice, cameraNote } from '../camera/cameraChoice';
 import { TARGET_ERROR_PX, type GazeModel } from '../gaze/calibration';
 import { GazeEstimator, type GazeEstimate } from '../gaze/estimator';
 import { toGazeSample } from '../gaze/features';
 import { TrackerClient } from '../tracking/trackerClient';
 import { RateMeter } from '../tracking/stats';
 import type { TrackingSample } from '../tracking/protocol';
+import { safeStorage } from '../storage';
 import { CalibrationView, type CalibrationResult } from '../ui/calibrationView';
+import { CameraPicker } from '../ui/cameraPicker';
 import { Overlay } from '../ui/overlay';
 
 const el = <T extends HTMLElement>(id: string): T => {
@@ -25,7 +28,20 @@ const overlay = new Overlay(overlayRoot);
 const calibration = new CalibrationView(canvas);
 const sampleRate = new RateMeter(1000);
 
+const cameraChoice = new CameraChoice(safeStorage());
+const picker = new CameraPicker({
+  onChange: (id) => {
+    cameraChoice.save(id);
+    void begin();
+  },
+  onRefresh: (cameras) => picker.setNote(cameraNote(cameras, cameraChoice.saved, cameraInUse)),
+});
+
+let trackerReady: Promise<TrackerClient> | null = null;
 let tracker: TrackerClient | null = null;
+let stream: MediaStream | null = null;
+let cameraInUse: string | null = null;
+let model: GazeModel | null = null;
 let estimator: GazeEstimator | null = null;
 let estimate: GazeEstimate = { point: null, status: 'no-face' };
 let liveFrame = 0;
@@ -36,22 +52,77 @@ function onSample(sample: TrackingSample): void {
   else if (estimator) estimate = estimator.update(toGazeSample(sample));
 }
 
+/** Starts tracking with the saved camera, or restarts it after a camera change. */
 async function begin(): Promise<void> {
   document.documentElement.requestFullscreen().catch(() => undefined);
+  stopLive();
+  calibration.cancel();
+  document.body.classList.remove('playing');
+  closeCamera();
   overlay.show({ title: 'Starting', text: 'Loading the face model and starting the camera…' });
   try {
-    const [client] = await Promise.all([TrackerClient.create(), startCamera(video)]);
+    trackerReady ??= TrackerClient.create();
+    const [client, camera] = await Promise.all([
+      trackerReady,
+      openCamera(video, cameraChoice.saved),
+    ]);
     tracker = client;
+    stream = camera.stream;
+    cameraInUse = camera.deviceId;
+    camera.stream.getVideoTracks()[0]?.addEventListener('ended', () => {
+      if (stream === camera.stream) onCameraLost();
+    });
     tracker.start(video, onSample);
   } catch (e) {
+    if (!tracker) trackerReady = null;
+    void picker.refresh(cameraChoice.saved);
     overlay.show({
       title: 'Could not start',
       text: e instanceof CameraError ? e.message : `Tracking failed to start: ${String(e)}`,
       actions: [{ label: 'Try again', run: () => void begin() }],
+      extra: picker.element,
     });
     return;
   }
+  await picker.refresh(cameraChoice.saved);
   void calibrate();
+}
+
+function closeCamera(): void {
+  tracker?.stop();
+  if (stream) stopCamera(stream);
+  stream = null;
+  cameraInUse = null;
+}
+
+function onCameraLost(): void {
+  closeCamera();
+  stopLive();
+  calibration.cancel();
+  document.body.classList.remove('playing');
+  void picker.refresh().then(() => picker.setNote('The camera was disconnected. Choose another.'));
+  overlay.show({
+    title: 'Camera lost',
+    text: 'Reconnect the camera and try again, or pick another one.',
+    actions: [{ label: 'Try again', run: () => void begin() }],
+    extra: picker.element,
+  });
+}
+
+/** Camera menu over the live view (C key). */
+function showCameraMenu(): void {
+  const current = model;
+  if (!current) return;
+  document.body.classList.remove('playing');
+  overlay.show({
+    title: 'Camera',
+    text: 'Changing camera starts calibration again.',
+    actions: [
+      { label: 'Back', run: () => startLive(current) },
+      { label: 'Recalibrate', run: () => void calibrate() },
+    ],
+    extra: picker.element,
+  });
 }
 
 async function calibrate(): Promise<void> {
@@ -69,6 +140,7 @@ function showResult(result: CalibrationResult): void {
       title: 'Calibration failed',
       text: result.reason,
       actions: [{ label: 'Try again', run: () => void calibrate() }],
+      extra: picker.element,
     });
     return;
   }
@@ -89,12 +161,15 @@ function showResult(result: CalibrationResult): void {
           { label: 'Recalibrate', run: () => void calibrate() },
           { label: 'Continue anyway', run: () => startLive(result.model) },
         ],
+    extra: picker.element,
   });
 }
 
-function startLive(model: GazeModel): void {
+function startLive(next: GazeModel): void {
   overlay.hide();
-  estimator = new GazeEstimator(model);
+  cancelAnimationFrame(liveFrame);
+  if (model !== next) estimator = new GazeEstimator(next);
+  model = next;
   estimate = { point: null, status: 'no-face' };
   document.body.classList.add('playing');
   liveFrame = requestAnimationFrame(drawLive);
@@ -103,6 +178,7 @@ function startLive(model: GazeModel): void {
 function stopLive(): void {
   cancelAnimationFrame(liveFrame);
   estimator = null;
+  model = null;
 }
 
 function drawLive(now: number): void {
@@ -147,7 +223,7 @@ function drawLive(now: number): void {
   ctx.textBaseline = 'top';
   const fps = sampleRate.rate(now).toFixed(0);
   ctx.fillText(
-    `${estimate.status} · ${fps} fps · ${tracker?.delegate ?? ''} · R to recalibrate`,
+    `${estimate.status} · ${fps} fps · ${tracker?.delegate ?? ''} · R to recalibrate · C for camera`,
     16,
     16,
   );
@@ -163,7 +239,9 @@ function resize(): void {
 
 window.addEventListener('resize', resize);
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'KeyR' && tracker && !calibration.running) void calibrate();
+  if (e.target instanceof HTMLSelectElement || !tracker || calibration.running) return;
+  if (e.code === 'KeyR' && stream) void calibrate();
+  else if (e.code === 'KeyC' && model && !overlay.visible) showCameraMenu();
 });
 
 resize();

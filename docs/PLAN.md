@@ -2,25 +2,26 @@
 
 ## Decisions
 
-| Area            | Decision                                                                                                              |
-| --------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Platform        | Web browser, Chrome only for now; local dev server, hosting decided later                                             |
-| Display         | Fullscreen play area                                                                                                  |
-| Movement        | Free steering towards gaze point; speed scales with gaze distance from the head (small minimum so it can almost stop) |
-| Gaze marker     | Faint marker shown where the player is looking                                                                        |
-| Calibration     | Every session: 9 dots, hands-free (2.5 s each, first 0.8 s ignored), then 4 validation dots; short dots retried once  |
-| Failed check    | Above 150 px median error: offer recalibrate or continue anyway                                                       |
-| Accuracy target | Median error under 150 px after calibration (go/no-go checkpoint)                                                     |
-| Round           | Timed, 2 minutes (`roundSeconds`); 3 s countdown on start and resume                                                  |
-| Score           | Fruit currently in the snake; a tail trim removes the lost fruit's points                                             |
-| Fruit           | 3 on screen at once (`fruitCount`)                                                                                    |
-| Walls           | Wrap around to the opposite edge                                                                                      |
-| Self-collision  | Trims the tail at the crossing point; no game over                                                                    |
-| Face lost       | Auto-pause after ~0.5 s; countdown on resume                                                                          |
-| Fallback input  | Mouse, behind a debug flag only                                                                                       |
-| v1 extras       | Local high score; sound effects and music generated in code (Web Audio)                                               |
-| Visual style    | Modern smooth: curved body, soft gradients, glowing fruit                                                             |
-| Voice (later)   | On-device only (`vosk-browser`), fixed vocabulary for start/pause                                                     |
+| Area            | Decision                                                                                                                           |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Platform        | Web browser, Chrome only for now; local dev server, hosting decided later                                                          |
+| Display         | Fullscreen play area                                                                                                               |
+| Movement        | Free steering towards gaze point; speed scales with gaze distance from the head (small minimum so it can almost stop)              |
+| Gaze marker     | Faint marker shown where the player is looking                                                                                     |
+| Calibration     | Every session: 9 dots, hands-free (2.5 s each, first 0.8 s ignored), then 4 validation dots; short dots retried once               |
+| Failed check    | Above 150 px median error: offer recalibrate or continue anyway                                                                    |
+| Accuracy target | Median error under 150 px after calibration (go/no-go checkpoint)                                                                  |
+| Round           | Timed, 2 minutes (`roundSeconds`); 3 s countdown on start and resume                                                               |
+| Score           | Fruit currently in the snake; a tail trim removes the lost fruit's points                                                          |
+| Fruit           | 3 on screen at once (`fruitCount`)                                                                                                 |
+| Walls           | Wrap around to the opposite edge                                                                                                   |
+| Self-collision  | Trims the tail at the crossing point; no game over                                                                                 |
+| Face lost       | Auto-pause after ~0.5 s; countdown on resume                                                                                       |
+| Fallback input  | Mouse, behind a debug flag only                                                                                                    |
+| Camera choice   | Picker on the start screen and the gaze and tracking pages; remembered in the browser, falls back to Chrome's default if unplugged |
+| v1 extras       | Local high score; sound effects and music generated in code (Web Audio)                                                            |
+| Visual style    | Modern smooth: curved body, soft gradients, glowing fruit                                                                          |
+| Voice (later)   | On-device only (`vosk-browser`), fixed vocabulary for start/pause                                                                  |
 
 ## Technology
 

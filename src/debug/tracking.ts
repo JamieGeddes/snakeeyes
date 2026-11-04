@@ -1,5 +1,8 @@
 import { DrawingUtils, FaceLandmarker } from '@mediapipe/tasks-vision';
-import { CameraError, startCamera } from '../camera/camera';
+import { CameraError, openCamera, stopCamera } from '../camera/camera';
+import { CameraChoice, cameraNote } from '../camera/cameraChoice';
+import { safeStorage } from '../storage';
+import { CameraPicker } from '../ui/cameraPicker';
 import type { FaceData, TrackingSample } from '../tracking/protocol';
 import { RateMeter, WindowStats } from '../tracking/stats';
 import { TrackerClient } from '../tracking/trackerClient';
@@ -24,6 +27,7 @@ const rangeButton = el<HTMLButtonElement>('measure-range');
 const status = el<HTMLElement>('status');
 const statsList = el<HTMLElement>('stats');
 const qualityList = el<HTMLElement>('quality');
+const cameraSlot = el<HTMLElement>('camera');
 
 const ctx = canvas.getContext('2d');
 if (!ctx) throw new Error('Canvas 2D context unavailable');
@@ -37,8 +41,21 @@ type Measurement = { kind: 'jitter' | 'range'; until: number; x: WindowStats; y:
 let measuring: Measurement | null = null;
 const results: { jitter?: { x: number; y: number }; range?: { x: number; y: number } } = {};
 
+const cameraChoice = new CameraChoice(safeStorage());
+const picker = new CameraPicker({
+  onChange: (id) => {
+    cameraChoice.save(id);
+    void start();
+  },
+  onRefresh: (cameras) => picker.setNote(cameraNote(cameras, cameraChoice.saved, cameraInUse)),
+});
+cameraSlot.append(picker.element);
+picker.element.hidden = true;
+
+let trackerReady: Promise<TrackerClient> | null = null;
 let tracker: TrackerClient | null = null;
 let stream: MediaStream | null = null;
+let cameraInUse: string | null = null;
 let lastFace: FaceData | null = null;
 let lastStatsAt = 0;
 
@@ -48,26 +65,66 @@ startButton.addEventListener('click', () => {
 jitterButton.addEventListener('click', () => beginMeasurement('jitter', JITTER_MS));
 rangeButton.addEventListener('click', () => beginMeasurement('range', RANGE_MS));
 
+/** Starts tracking with the saved camera, or restarts it after a camera change. */
 async function start(): Promise<void> {
   startButton.disabled = true;
+  picker.disabled = true;
+  measuring = null;
+  closeCamera();
   status.textContent = 'Loading face model and starting camera…';
   try {
-    [tracker, stream] = await Promise.all([
-      TrackerClient.create({ landmarks: true }),
-      startCamera(video),
+    trackerReady ??= TrackerClient.create({ landmarks: true });
+    const [client, camera] = await Promise.all([
+      trackerReady,
+      openCamera(video, cameraChoice.saved),
     ]);
+    tracker = client;
+    stream = camera.stream;
+    cameraInUse = camera.deviceId;
+    camera.stream.getVideoTracks()[0]?.addEventListener('ended', () => {
+      if (stream !== camera.stream) return;
+      closeCamera();
+      status.textContent = 'The camera was disconnected. Pick a camera or press Start camera.';
+      startButton.disabled = false;
+      void picker.refresh();
+    });
   } catch (e) {
+    if (!tracker) trackerReady = null;
     status.textContent =
       e instanceof CameraError ? e.message : `Could not start tracking: ${String(e)}`;
     startButton.disabled = false;
+    picker.disabled = false;
+    await showPicker();
     return;
   }
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
+  // Measurements from another camera would mislead, so start the comparison afresh.
+  delete results.jitter;
+  delete results.range;
+  renderQuality();
   status.textContent = 'Tracking.';
   jitterButton.disabled = false;
   rangeButton.disabled = false;
+  picker.disabled = false;
   tracker.start(video, onSample);
+  await showPicker();
+}
+
+async function showPicker(): Promise<void> {
+  await picker.refresh(cameraChoice.saved);
+  picker.element.hidden = false;
+}
+
+function closeCamera(): void {
+  tracker?.stop();
+  if (stream) stopCamera(stream);
+  stream = null;
+  cameraInUse = null;
+  lastFace = null;
+  jitterButton.disabled = true;
+  rangeButton.disabled = true;
+  draw(null);
 }
 
 function onSample(sample: TrackingSample): void {

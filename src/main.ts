@@ -1,8 +1,11 @@
+import { CameraChoice, cameraNote } from './camera/cameraChoice';
 import { Game, type GameEvent } from './game/game';
-import { HighScore, type KeyValueStore } from './game/highScore';
+import { HighScore } from './game/highScore';
 import { MouseInput } from './input/mouse';
 import { noInput, type InputSource } from './input/types';
 import { Renderer } from './render/renderer';
+import { safeStorage } from './storage';
+import { CameraPicker } from './ui/cameraPicker';
 import { Overlay } from './ui/overlay';
 
 const STEP = 1 / 60;
@@ -17,18 +20,19 @@ const input: InputSource = debug ? new MouseInput() : noInput;
 const renderer = new Renderer(canvas);
 const overlay = new Overlay(overlayRoot);
 const highScore = new HighScore(safeStorage());
+const cameraChoice = new CameraChoice(safeStorage());
+const cameraPicker = new CameraPicker({
+  canRequestAccess: true,
+  onChange: (id) => {
+    cameraChoice.save(id);
+    cameraPicker.setNote(cameraNote(cameraPicker.list, id));
+  },
+  onRefresh: (cameras) => cameraPicker.setNote(cameraNote(cameras, cameraChoice.saved)),
+});
 const game = new Game(boardSize());
 
 function boardSize(): { width: number; height: number } {
   return { width: window.innerWidth, height: window.innerHeight };
-}
-
-function safeStorage(): KeyValueStore | null {
-  try {
-    return window.localStorage;
-  } catch {
-    return null;
-  }
 }
 
 function enterFullscreen(): void {
@@ -66,12 +70,15 @@ function showReady(): void {
           title: 'SnakeEyes',
           text: 'Debug mode: steer with the mouse. Eat fruit to grow; crossing yourself trims your tail. Two minutes on the clock.',
           actions: [{ label: 'Start', run: start }],
+          extra: cameraPicker.element,
         }
       : {
           title: 'SnakeEyes',
           text: 'Eye tracking arrives in a later milestone. For now, add ?debug to the URL to steer with the mouse.',
+          extra: cameraPicker.element,
         },
   );
+  void cameraPicker.refresh(cameraChoice.saved);
 }
 
 function handle(events: readonly GameEvent[]): void {
@@ -100,8 +107,13 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (e.code !== 'Space' || e.repeat) return;
-  // Let a focused overlay button handle its own activation.
-  if (overlay.visible && document.activeElement instanceof HTMLButtonElement) return;
+  // Let a focused overlay control handle its own keys.
+  const focused = document.activeElement;
+  if (
+    overlay.visible &&
+    (focused instanceof HTMLButtonElement || focused instanceof HTMLSelectElement)
+  )
+    return;
   e.preventDefault();
   if (game.phase === 'playing' || game.phase === 'countdown') pause();
   else if (game.phase === 'paused') resume();

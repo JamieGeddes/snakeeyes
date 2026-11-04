@@ -7,6 +7,8 @@ export interface Screen {
   readonly title: string;
   readonly text: string;
   readonly actions?: readonly Action[];
+  /** Extra content, such as the camera picker, shown between the text and the buttons. */
+  readonly extra?: HTMLElement;
 }
 
 /** HTML panel shown over the canvas for start, pause, result and game-over screens. */
@@ -15,12 +17,15 @@ export class Overlay {
   private readonly title: HTMLElement;
   private readonly text: HTMLElement;
   private readonly actions: HTMLElement;
+  private readonly extra: HTMLElement;
 
   constructor(root: HTMLElement) {
     this.root = root;
     this.title = query(root, '[data-title]');
     this.text = query(root, '[data-text]');
     this.actions = query(root, '[data-actions]');
+    this.extra = document.createElement('div');
+    this.actions.before(this.extra);
   }
 
   get visible(): boolean {
@@ -37,6 +42,7 @@ export class Overlay {
       b.addEventListener('click', a.run);
       return b;
     });
+    this.extra.replaceChildren(...(screen.extra ? [screen.extra] : []));
     this.actions.replaceChildren(...buttons);
     this.root.hidden = false;
     buttons[0]?.focus();
