@@ -18,16 +18,20 @@ npm run dev
 
 Open the URL Vite prints (served on `localhost`, which browsers treat as secure for camera access).
 
-## Playing (current build)
+## Playing
 
-Eye tracking is not wired in yet. Open the dev URL with `?debug` (e.g. `http://localhost:5173/?debug`) to steer with the mouse.
+1. Click **Start** and allow the camera. The game goes fullscreen.
+2. Keep your head still and follow the 9 calibration dots, then the 4 accuracy dots.
+3. Click **Play**. The snake heads for where you look; look further away to go faster.
 
-| Key   | Action               |
-| ----- | -------------------- |
-| Space | Start, pause, resume |
-| Esc   | Pause                |
+| Key   | Action        |
+| ----- | ------------- |
+| Space | Pause, resume |
+| Esc   | Pause         |
 
-The game also pauses when the window loses focus or leaves fullscreen.
+The game pauses when it can't see your face, when your eyes stay shut for more than 0.5 s, when the window loses focus or when it leaves fullscreen. Resume with Space or the button. Calibration carries over between rounds; the pause and game-over screens offer **Recalibrate** and the camera dropdown. If the play area has changed size since calibrating, the game recalibrates before resuming.
+
+Add `?debug` to the URL (e.g. `http://localhost:5173/?debug`) to steer with the mouse instead; no camera is used.
 
 ## Choosing a camera
 

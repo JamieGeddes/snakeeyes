@@ -1,10 +1,10 @@
-import { CameraError, openCamera, stopCamera } from '../camera/camera';
+import { CameraError } from '../camera/camera';
 import { CameraChoice, cameraNote } from '../camera/cameraChoice';
 import { TARGET_ERROR_PX, type GazeModel } from '../gaze/calibration';
 import { GazeEstimator, type GazeEstimate } from '../gaze/estimator';
 import { toGazeSample } from '../gaze/features';
-import { TrackerClient } from '../tracking/trackerClient';
 import { RateMeter } from '../tracking/stats';
+import { TrackingSession } from '../tracking/session';
 import type { TrackingSample } from '../tracking/protocol';
 import { safeStorage } from '../storage';
 import { CalibrationView, type CalibrationResult } from '../ui/calibrationView';
@@ -34,13 +34,11 @@ const picker = new CameraPicker({
     cameraChoice.save(id);
     void begin();
   },
-  onRefresh: (cameras) => picker.setNote(cameraNote(cameras, cameraChoice.saved, cameraInUse)),
+  onRefresh: (cameras) =>
+    picker.setNote(cameraNote(cameras, cameraChoice.saved, session.cameraInUse)),
 });
+const session = new TrackingSession({ video, onSample, onCameraLost });
 
-let trackerReady: Promise<TrackerClient> | null = null;
-let tracker: TrackerClient | null = null;
-let stream: MediaStream | null = null;
-let cameraInUse: string | null = null;
 let model: GazeModel | null = null;
 let estimator: GazeEstimator | null = null;
 let estimate: GazeEstimate = { point: null, status: 'no-face' };
@@ -58,23 +56,10 @@ async function begin(): Promise<void> {
   stopLive();
   calibration.cancel();
   document.body.classList.remove('playing');
-  closeCamera();
   overlay.show({ title: 'Starting', text: 'Loading the face model and starting the camera…' });
   try {
-    trackerReady ??= TrackerClient.create();
-    const [client, camera] = await Promise.all([
-      trackerReady,
-      openCamera(video, cameraChoice.saved),
-    ]);
-    tracker = client;
-    stream = camera.stream;
-    cameraInUse = camera.deviceId;
-    camera.stream.getVideoTracks()[0]?.addEventListener('ended', () => {
-      if (stream === camera.stream) onCameraLost();
-    });
-    tracker.start(video, onSample);
+    await session.open(cameraChoice.saved);
   } catch (e) {
-    if (!tracker) trackerReady = null;
     void picker.refresh(cameraChoice.saved);
     overlay.show({
       title: 'Could not start',
@@ -88,15 +73,7 @@ async function begin(): Promise<void> {
   void calibrate();
 }
 
-function closeCamera(): void {
-  tracker?.stop();
-  if (stream) stopCamera(stream);
-  stream = null;
-  cameraInUse = null;
-}
-
 function onCameraLost(): void {
-  closeCamera();
   stopLive();
   calibration.cancel();
   document.body.classList.remove('playing');
@@ -223,7 +200,7 @@ function drawLive(now: number): void {
   ctx.textBaseline = 'top';
   const fps = sampleRate.rate(now).toFixed(0);
   ctx.fillText(
-    `${estimate.status} · ${fps} fps · ${tracker?.delegate ?? ''} · R to recalibrate · C for camera`,
+    `${estimate.status} · ${fps} fps · ${session.delegate ?? ''} · R to recalibrate · C for camera`,
     16,
     16,
   );
@@ -239,8 +216,8 @@ function resize(): void {
 
 window.addEventListener('resize', resize);
 window.addEventListener('keydown', (e) => {
-  if (e.target instanceof HTMLSelectElement || !tracker || calibration.running) return;
-  if (e.code === 'KeyR' && stream) void calibrate();
+  if (e.target instanceof HTMLSelectElement || !session.active || calibration.running) return;
+  if (e.code === 'KeyR') void calibrate();
   else if (e.code === 'KeyC' && model && !overlay.visible) showCameraMenu();
 });
 

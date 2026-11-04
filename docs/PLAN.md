@@ -16,7 +16,9 @@
 | Fruit           | 3 on screen at once (`fruitCount`)                                                                                                 |
 | Walls           | Wrap around to the opposite edge                                                                                                   |
 | Self-collision  | Trims the tail at the crossing point; no game over                                                                                 |
-| Face lost       | Auto-pause after ~0.5 s; countdown on resume                                                                                       |
+| Face lost       | No face, or eyes shut, for over 0.5 s auto-pauses; resume manually (Space or button), with countdown                               |
+| Rounds          | Calibration carries over; pause and game-over screens offer Recalibrate and the camera picker                                      |
+| Resizing        | On resume or play again, recalibrate if the play area differs from the calibrated size                                             |
 | Fallback input  | Mouse, behind a debug flag only                                                                                                    |
 | Camera choice   | Picker on the start screen and the gaze and tracking pages; remembered in the browser, falls back to Chrome's default if unplugged |
 | v1 extras       | Local high score; sound effects and music generated in code (Web Audio)                                                            |
@@ -43,7 +45,7 @@ WebGazer.js was rejected: GPL-3.0 and less accurate than MediaPipe iris landmark
 2. Features: per-eye iris position normalised to eye corners and lids, plus head yaw/pitch/roll.
 3. Calibration takes the median feature vector per dot and fits ridge regression to screen x,y (lambda by leave-one-dot-out cross-validation). Features: iris x/y with centred quadratic terms, eye openness, head yaw and pitch. Validation reports median error of filtered gaze.
 4. One Euro filter for smoothing; frames during blinks are discarded.
-5. Low confidence or no face for ~0.5 s triggers auto-pause.
+5. No face, or eyes shut, for over 0.5 s triggers auto-pause; blinks shorter than that keep the last gaze point.
 
 ## Architecture
 
