@@ -29,6 +29,10 @@ Eye tracking is not wired in yet. Open the dev URL with `?debug` (e.g. `http://l
 
 The game also pauses when the window loses focus or leaves fullscreen.
 
+## Choosing a camera
+
+The start screen, `/tracking.html` and `/gaze.html` have a camera dropdown. The choice is remembered in this browser; if that camera is unplugged, Chrome's default is used and the page says so. Changing camera on `/gaze.html` starts calibration again, and on `/tracking.html` it clears the signal-quality measurements.
+
 ## Tracking check
 
 `/tracking.html` (e.g. `http://localhost:5173/tracking.html`) shows the camera with eye landmarks, detection rate, inference time, head pose and blink scores. Its signal-quality panel measures iris jitter while staring at one spot against the range covered looking edge to edge; the ratio indicates whether the accuracy target is reachable. Chrome will ask for camera permission.
@@ -37,7 +41,7 @@ The face model is self-hosted in `public/models/` (see its README for source, ch
 
 ## Gaze check
 
-`/gaze.html` runs the full calibration (9 dots, then 4 to check accuracy) and then shows a marker where it thinks you are looking, with reference crosses to test against. Press R to recalibrate.
+`/gaze.html` runs the full calibration (9 dots, then 4 to check accuracy) and then shows a marker where it thinks you are looking, with reference crosses to test against. Press R to recalibrate, or C to change camera.
 
 ## Scripts
 

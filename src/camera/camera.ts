@@ -42,28 +42,79 @@ export function describeCameraError(reason: CameraErrorReason): string {
   }
 }
 
-/** Starts the front camera and plays it into `video`. Audio is never requested. */
-export async function startCamera(video: HTMLVideoElement): Promise<MediaStream> {
+/**
+ * Starts a camera and plays it into `video`. With no `deviceId`, Chrome picks its default.
+ * Audio is never requested.
+ */
+export async function startCamera(
+  video: HTMLVideoElement,
+  deviceId: string | null = null,
+): Promise<MediaStream> {
   if (!navigator.mediaDevices?.getUserMedia) throw new CameraError('unsupported');
   let stream: MediaStream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({
       audio: false,
       video: {
-        facingMode: 'user',
+        ...(deviceId ? { deviceId: { exact: deviceId } } : { facingMode: 'user' }),
         width: { ideal: 640 },
         height: { ideal: 480 },
         frameRate: { ideal: 30 },
       },
     });
   } catch (e) {
-    throw new CameraError(e instanceof DOMException ? cameraErrorReason(e.name) : 'unknown');
+    throw toCameraError(e);
   }
   video.muted = true;
   video.playsInline = true;
   video.srcObject = stream;
   await video.play();
   return stream;
+}
+
+export interface OpenedCamera {
+  readonly stream: MediaStream;
+  /** The device actually in use, if the browser reports it. */
+  readonly deviceId: string | null;
+  /** True when `wanted` was not found and Chrome's default was used instead. */
+  readonly fellBack: boolean;
+}
+
+/** Starts `wanted`, falling back to Chrome's default camera if it isn't connected. */
+export async function openCamera(
+  video: HTMLVideoElement,
+  wanted: string | null,
+  start: typeof startCamera = startCamera,
+): Promise<OpenedCamera> {
+  if (wanted) {
+    try {
+      const stream = await start(video, wanted);
+      return { stream, deviceId: streamDeviceId(stream), fellBack: false };
+    } catch (e) {
+      if (!(e instanceof CameraError && e.reason === 'not-found')) throw e;
+    }
+  }
+  const stream = await start(video);
+  return { stream, deviceId: streamDeviceId(stream), fellBack: wanted !== null };
+}
+
+export function streamDeviceId(stream: MediaStream): string | null {
+  return stream.getVideoTracks()[0]?.getSettings().deviceId ?? null;
+}
+
+/** Asks for camera access so device names can be listed, then turns the camera off. */
+export async function requestCameraAccess(): Promise<void> {
+  if (!navigator.mediaDevices?.getUserMedia) throw new CameraError('unsupported');
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: true });
+    stopCamera(stream);
+  } catch (e) {
+    throw toCameraError(e);
+  }
+}
+
+function toCameraError(e: unknown): CameraError {
+  return new CameraError(e instanceof DOMException ? cameraErrorReason(e.name) : 'unknown');
 }
 
 export function stopCamera(stream: MediaStream): void {

@@ -118,3 +118,38 @@ button:focus-visible {
   color: #9fb0c8;
   font-size: 0.9rem;
 }
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+
+.camera-picker label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #9fb0c8;
+}
+
+.camera-picker select {
+  padding: 0.45rem 0.75rem;
+  border: 1px solid rgba(159, 176, 200, 0.35);
+  border-radius: 0.5rem;
+  background: #16233a;
+  color: #e6edf7;
+  font:
+    1rem system-ui,
+    sans-serif;
+}
+
+.camera-picker .note {
+  margin: 0.4rem 0 0;
+  color: #9fb0c8;
+  font-size: 0.9rem;
+}
+
+.camera-picker [hidden] {
+  display: none;
+}
