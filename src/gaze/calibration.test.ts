@@ -6,20 +6,35 @@ import {
   DotSequence,
   evaluateValidation,
   fitCalibration,
+  fitRidgeCalibration,
+  HEAD_MOVE_POINTS,
+  HEAD_MOVE_TIMING,
+  HEAD_TEST_POINTS,
+  HEAD_TEST_TIMING,
   MIN_SAMPLES_PER_DOT,
   predictGaze,
   VALIDATION_POINTS,
   VALIDATION_TIMING,
 } from './calibration';
 import type { GazeInputs } from './features';
-import { runSequence, syntheticInputs } from './simulate';
+import { headSweep, naturalHead, runSequence, syntheticInputs } from './simulate';
 import { mulberry32 } from '../game/random';
 
 const screen = { width: 1500, height: 900 };
-const inputs: GazeInputs = {
-  iris: { x: 0.5, y: 0.5, openness: 0.4 },
-  pose: { yaw: 0, pitch: 0, roll: 0 },
-};
+const inputs: GazeInputs = syntheticInputs({ x: 750, y: 450 }, screen, 0, Math.random);
+
+/** Calibration dots with a still head, then the head-move step. */
+function calibrate(seed = 2): { cal: DotSequence; move: DotSequence } {
+  const cal = new DotSequence(CALIBRATION_POINTS, CALIBRATION_TIMING);
+  runSequence(cal, screen, { seed, poseNoise: 0.003 });
+  const move = new DotSequence(HEAD_MOVE_POINTS, HEAD_MOVE_TIMING);
+  runSequence(move, screen, {
+    seed: seed + 1,
+    poseNoise: 0.003,
+    head: headSweep(HEAD_MOVE_TIMING.dwellMs),
+  });
+  return { cal, move };
+}
 
 describe('DotSequence', () => {
   const timing = { dwellMs: 1000, settleMs: 400 };
@@ -83,7 +98,25 @@ describe('fitCalibration and evaluateValidation', () => {
     if (!model) throw new Error('fit failed');
     const target = vec(400, 650);
     const p = predictGaze(model, syntheticInputs(target, screen, 0, mulberry32(1)));
-    expect(Math.hypot(p.x - target.x, p.y - target.y)).toBeLessThan(25);
+    expect(p).not.toBeNull();
+    expect(Math.hypot((p?.x ?? 0) - target.x, (p?.y ?? 0) - target.y)).toBeLessThan(25);
+  });
+
+  it('stays accurate while the head moves naturally, unlike the ridge model', () => {
+    const { cal, move } = calibrate();
+    const model = fitCalibration(cal, screen, move);
+    const ridge = fitRidgeCalibration(cal, screen);
+    if (!model || !ridge) throw new Error('fit failed');
+    expect(model.headRange.yaw).toBeGreaterThan(0.2);
+
+    const val = new DotSequence(HEAD_TEST_POINTS, HEAD_TEST_TIMING);
+    runSequence(val, screen, { seed: 9, poseNoise: 0.003, head: naturalHead() });
+    const geometric = evaluateValidation(model, val).medianErrorPx;
+    const baseline = evaluateValidation(ridge, val).medianErrorPx;
+
+    // Simulated: about 21 px for the geometric model, thousands for the ridge one.
+    expect(geometric).toBeLessThan(40);
+    expect(baseline).toBeGreaterThan(geometric * 5);
   });
 
   it('fails when too few dots have samples', () => {

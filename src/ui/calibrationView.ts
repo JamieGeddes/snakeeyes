@@ -4,36 +4,69 @@ import {
   DotSequence,
   evaluateValidation,
   fitCalibration,
+  HEAD_MOVE_POINTS,
+  HEAD_MOVE_TIMING,
+  HEAD_TEST_POINTS,
+  HEAD_TEST_TIMING,
+  MIN_DOTS,
+  MIN_SAMPLES_PER_DOT,
   toPixels,
   VALIDATION_POINTS,
   VALIDATION_TIMING,
-  type GazeModel,
+  type DotTiming,
+  type GeometricModel,
   type ValidationResult,
 } from '../gaze/calibration';
 import { toGazeSample } from '../gaze/features';
 import type { TrackingSample } from '../tracking/protocol';
 
+export interface CalibrationSequences {
+  readonly calibration: DotSequence;
+  readonly headMove: DotSequence;
+  readonly validation: DotSequence;
+}
+
 export type CalibrationResult =
-  | { readonly ok: true; readonly model: GazeModel; readonly validation: ValidationResult }
+  | {
+      readonly ok: true;
+      readonly model: GeometricModel;
+      readonly validation: ValidationResult;
+      readonly sequences: CalibrationSequences;
+    }
   | { readonly ok: false; readonly reason: string };
 
-const INTRO_MS = 2500;
+const MESSAGE_MS = 2500;
 const FONT = 'system-ui, sans-serif';
+const UNCLEAR_EYES =
+  "Your eyes weren't visible clearly enough. Check your face is well lit and in view of the camera, then try again.";
+
+/** Prompts for the head-move step, each shown for an equal share of it. */
+export const HEAD_PROMPTS = [
+  'Slowly turn your head left and right',
+  'Now slowly nod up and down',
+  'Now slowly lean towards the screen and back',
+] as const;
 
 type Stage =
-  | { kind: 'intro'; until: number }
-  | { kind: 'calibrate'; seq: DotSequence }
-  | { kind: 'validate'; seq: DotSequence; model: GazeModel };
+  | { kind: 'message'; title: string; subtitle: string; until: number }
+  | {
+      kind: 'dots';
+      seq: DotSequence;
+      timing: DotTiming;
+      label: string;
+      prompt: (progress: number) => string;
+    };
 
 /**
- * Fullscreen, hands-free calibration: 9 dots to fit the model, then 4 dots to
- * measure accuracy. Feed it tracking samples via `handleSample` while it runs.
+ * Fullscreen, hands-free calibration: 9 dots with the head still, a head-move step
+ * looking at one dot, then 4 dots to measure accuracy. Feed it tracking samples via
+ * `handleSample` while it runs.
  */
 export class CalibrationView {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
   private stage: Stage | null = null;
-  private finish: ((r: CalibrationResult) => void) | null = null;
+  private stageDone: (() => void) | null = null;
   private frame = 0;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -47,25 +80,98 @@ export class CalibrationView {
     return this.stage !== null;
   }
 
-  run(): Promise<CalibrationResult> {
-    this.cancel();
-    this.resize();
-    this.stage = { kind: 'intro', until: performance.now() + INTRO_MS };
-    this.frame = requestAnimationFrame(this.tick);
-    return new Promise((resolve) => {
-      this.finish = resolve;
+  /** Runs the full calibration. If cancelled, the promise never settles. */
+  async run(): Promise<CalibrationResult> {
+    this.start();
+    await this.message('Follow the dot with your eyes', 'Keep your head still. Blinking is fine.');
+
+    const calibration = new DotSequence(CALIBRATION_POINTS, CALIBRATION_TIMING);
+    await this.dots(calibration, CALIBRATION_TIMING, 'Calibrating · keep your head still');
+    const usable = calibration.samples.filter((s) => s.length >= MIN_SAMPLES_PER_DOT).length;
+    if (usable < MIN_DOTS) return this.end({ ok: false, reason: UNCLEAR_EYES });
+
+    await this.message(
+      'Now keep looking at the dot and move your head',
+      'Slowly turn, then nod, then lean towards the screen and back. Follow the prompts.',
+    );
+    const headMove = new DotSequence(HEAD_MOVE_POINTS, HEAD_MOVE_TIMING);
+    await this.dots(headMove, HEAD_MOVE_TIMING, 'Head movement', (progress) => {
+      const i = Math.min(HEAD_PROMPTS.length - 1, Math.floor(progress * HEAD_PROMPTS.length));
+      return HEAD_PROMPTS[i] ?? '';
     });
+
+    const model = fitCalibration(calibration, this.screen, headMove);
+    if (!model) return this.end({ ok: false, reason: UNCLEAR_EYES });
+
+    await this.message('Last part: follow the dot again', 'Keep your head still.');
+    const validation = new DotSequence(VALIDATION_POINTS, VALIDATION_TIMING);
+    await this.dots(
+      validation,
+      VALIDATION_TIMING,
+      'Checking accuracy',
+      () => 'Keep your head still',
+    );
+    return this.end({
+      ok: true,
+      model,
+      validation: evaluateValidation(model, validation),
+      sequences: { calibration, headMove, validation },
+    });
+  }
+
+  /** Accuracy test with natural head movement, for the gaze check page. */
+  async runHeadTest(): Promise<DotSequence> {
+    this.start();
+    await this.message(
+      'Follow the dot, moving your head naturally',
+      'Turn, tilt and lean a little, as you would while playing.',
+    );
+    const seq = new DotSequence(HEAD_TEST_POINTS, HEAD_TEST_TIMING);
+    await this.dots(seq, HEAD_TEST_TIMING, 'Head-move test · move your head naturally');
+    return this.end(seq);
   }
 
   cancel(): void {
     cancelAnimationFrame(this.frame);
     this.stage = null;
-    this.finish = null;
+    this.stageDone = null;
   }
 
   handleSample(sample: TrackingSample): void {
     const stage = this.stage;
-    if (stage && stage.kind !== 'intro') stage.seq.update(sample.t, toGazeSample(sample));
+    if (stage?.kind === 'dots') stage.seq.update(sample.t, toGazeSample(sample));
+  }
+
+  private start(): void {
+    this.cancel();
+    this.resize();
+    this.frame = requestAnimationFrame(this.tick);
+  }
+
+  private end<T>(result: T): T {
+    this.cancel();
+    this.clear();
+    return result;
+  }
+
+  private message(title: string, subtitle: string): Promise<void> {
+    return this.show({ kind: 'message', title, subtitle, until: performance.now() + MESSAGE_MS });
+  }
+
+  private dots(
+    seq: DotSequence,
+    timing: DotTiming,
+    label: string,
+    prompt: (progress: number) => string = () => '',
+  ): Promise<void> {
+    return this.show({ kind: 'dots', seq, timing, label, prompt });
+  }
+
+  private show(stage: Stage): Promise<void> {
+    this.stage = stage;
+    return new Promise((resolve) => {
+      this.stageDone = resolve;
+    });
   }
 
   private get screen(): { width: number; height: number } {
@@ -83,56 +189,18 @@ export class CalibrationView {
   private readonly tick = (now: number): void => {
     const stage = this.stage;
     if (!stage) return;
-    this.advance(stage, now);
-    if (this.stage) {
-      this.draw(this.stage, now);
-      this.frame = requestAnimationFrame(this.tick);
+    const finished =
+      stage.kind === 'message' ? now >= stage.until : (stage.seq.update(now), stage.seq.done);
+    if (finished) {
+      const done = this.stageDone;
+      this.stageDone = null;
+      done?.();
+    } else {
+      this.draw(stage, now);
     }
+    // The next stage, if any, is set by the awaiting code before the next frame.
+    if (this.stage) this.frame = requestAnimationFrame(this.tick);
   };
-
-  private advance(stage: Stage, now: number): void {
-    if (stage.kind === 'intro') {
-      if (now >= stage.until) {
-        this.stage = {
-          kind: 'calibrate',
-          seq: new DotSequence(CALIBRATION_POINTS, CALIBRATION_TIMING),
-        };
-      }
-      return;
-    }
-    stage.seq.update(now);
-    if (!stage.seq.done) return;
-
-    if (stage.kind === 'calibrate') {
-      const model = fitCalibration(stage.seq, this.screen);
-      if (!model) {
-        this.end({
-          ok: false,
-          reason:
-            "Your eyes weren't visible clearly enough. Check your face is well lit and in view of the camera, then try again.",
-        });
-        return;
-      }
-      this.stage = {
-        kind: 'validate',
-        seq: new DotSequence(VALIDATION_POINTS, VALIDATION_TIMING),
-        model,
-      };
-      return;
-    }
-    this.end({
-      ok: true,
-      model: stage.model,
-      validation: evaluateValidation(stage.model, stage.seq),
-    });
-  }
-
-  private end(result: CalibrationResult): void {
-    const finish = this.finish;
-    this.cancel();
-    this.clear();
-    finish?.(result);
-  }
 
   private clear(): void {
     const { width, height } = this.screen;
@@ -147,21 +215,20 @@ export class CalibrationView {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    if (stage.kind === 'intro') {
+    if (stage.kind === 'message') {
       ctx.fillStyle = '#e6edf7';
       ctx.font = `600 28px ${FONT}`;
-      ctx.fillText('Keep your head still and follow the dot with your eyes', width / 2, height / 2);
+      ctx.fillText(stage.title, width / 2, height / 2);
       ctx.fillStyle = '#9fb0c8';
       ctx.font = `18px ${FONT}`;
-      ctx.fillText('It moves on by itself. Blinking is fine.', width / 2, height / 2 + 40);
+      ctx.fillText(stage.subtitle, width / 2, height / 2 + 40);
       return;
     }
 
     const dot = stage.seq.current(now);
     if (!dot) return;
     const p = toPixels(dot.target, this.screen);
-    const timing = stage.kind === 'calibrate' ? CALIBRATION_TIMING : VALIDATION_TIMING;
-    const settleFraction = timing.settleMs / timing.dwellMs;
+    const settleFraction = stage.timing.settleMs / stage.timing.dwellMs;
 
     // A ring that shrinks onto the dot draws the eye in; then an arc shows collection progress.
     if (dot.settling) {
@@ -188,9 +255,16 @@ export class CalibrationView {
     ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
     ctx.fill();
 
+    // Prompts sit just above the dot so reading them barely moves the eyes.
+    const prompt = stage.prompt(dot.progress);
+    if (prompt) {
+      ctx.fillStyle = '#e6edf7';
+      ctx.font = `600 20px ${FONT}`;
+      ctx.fillText(prompt, p.x, p.y - 44);
+    }
+
     ctx.fillStyle = '#9fb0c8';
     ctx.font = `15px ${FONT}`;
-    const label = stage.kind === 'calibrate' ? 'Calibrating' : 'Checking accuracy';
-    ctx.fillText(`${label} · ${dot.step + 1} / ${dot.steps}`, width / 2, height - 28);
+    ctx.fillText(`${stage.label} · ${dot.step + 1} / ${dot.steps}`, width / 2, height - 28);
   }
 }

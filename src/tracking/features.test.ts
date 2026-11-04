@@ -3,6 +3,7 @@ import {
   blendshapeScore,
   eyeFeatures,
   headPoseFromMatrix,
+  headTransformFromMatrix,
   irisPosition,
   type Landmark,
 } from './features';
@@ -95,6 +96,25 @@ describe('headPoseFromMatrix', () => {
 
   it('returns null for a short matrix', () => {
     expect(headPoseFromMatrix([1, 0, 0])).toBeNull();
+  });
+});
+
+describe('headTransformFromMatrix', () => {
+  it('splits rotation (scale removed) and position', () => {
+    const r = mul(ry(0.2), rx(-0.1));
+    const head = headTransformFromMatrix(
+      transform(
+        r.map((row) => row.map((v) => v * 1.5)),
+        [1, -2, -40],
+      ),
+    );
+    expect(head?.position).toEqual([1, -2, -40]);
+    r.flat().forEach((v, i) => expect(head?.rotation[i]).toBeCloseTo(v));
+  });
+
+  it('returns null for a short or degenerate matrix', () => {
+    expect(headTransformFromMatrix([1, 0, 0])).toBeNull();
+    expect(headTransformFromMatrix(new Array<number>(16).fill(0))).toBeNull();
   });
 });
 

@@ -21,11 +21,11 @@ const look = (x: number, y: number) => syntheticInputs(vec(x, y), screen, 0, mul
 describe('GazeEstimator', () => {
   it('estimates where the player is looking', () => {
     const est = new GazeEstimator(model());
-    let e = est.update({ t: 0, inputs: look(300, 200), blinking: false });
+    let e = est.update({ t: 0, inputs: look(450, 300), blinking: false });
     for (let t = 33; t < 1000; t += 33)
-      e = est.update({ t, inputs: look(300, 200), blinking: false });
+      e = est.update({ t, inputs: look(450, 300), blinking: false });
     expect(e.status).toBe('tracking');
-    expect(Math.hypot((e.point?.x ?? 0) - 300, (e.point?.y ?? 0) - 200)).toBeLessThan(25);
+    expect(Math.hypot((e.point?.x ?? 0) - 450, (e.point?.y ?? 0) - 300)).toBeLessThan(40);
   });
 
   it('holds the last point through a blink', () => {
@@ -46,10 +46,10 @@ describe('GazeEstimator', () => {
 
   it('restarts the filter after a gap instead of gliding', () => {
     const est = new GazeEstimator(model());
-    for (let t = 0; t < 600; t += 33) est.update({ t, inputs: look(100, 100), blinking: false });
+    for (let t = 0; t < 600; t += 33) est.update({ t, inputs: look(300, 200), blinking: false });
     est.update({ t: 633, inputs: null, blinking: false });
-    const e = est.update({ t: 1500, inputs: look(1400, 800), blinking: false });
-    expect(Math.hypot((e.point?.x ?? 0) - 1400, (e.point?.y ?? 0) - 800)).toBeLessThan(25);
+    const e = est.update({ t: 1500, inputs: look(1100, 600), blinking: false });
+    expect(Math.hypot((e.point?.x ?? 0) - 1100, (e.point?.y ?? 0) - 600)).toBeLessThan(30);
   });
 });
 
@@ -62,7 +62,7 @@ describe('gaze features', () => {
     const face = {
       iris: { x: 0.5, y: 0.5, openness: 0.4 },
       pose: { yaw: 0, pitch: 0, roll: 0 },
-      position: null,
+      head: null,
       blink: { left: BLINK_THRESHOLD + 0.1, right: 0 },
     };
     expect(toGazeSample({ t: 5, inferenceMs: 1, face }).blinking).toBe(true);

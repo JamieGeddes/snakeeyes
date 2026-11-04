@@ -168,7 +168,7 @@ function showCalibrationResult(result: CalibrationResult): void {
     title: passed ? 'Calibrated' : 'Accuracy is low',
     text: passed
       ? `${accuracy} Look where you want the snake to go.`
-      : `${accuracy} Recalibrating may help: keep your head still and check the lighting.`,
+      : `${accuracy} Recalibrating may help: check the lighting and follow the prompts.`,
     actions: passed ? [play, recalibrate] : [recalibrate, play],
     extra: cameraPicker.element,
   });
@@ -261,8 +261,11 @@ function startDebugRound(): void {
 
 // --- Loop and events -----------------------------------------------------
 
-function handle(events: readonly GameEvent[]): void {
-  for (const e of events) if (e.type === 'over') showGameOver(e.score);
+function handle(events: readonly GameEvent[], now: number): void {
+  for (const e of events) {
+    if (e.type === 'eat' && !debug) gaze.fruitEaten(e.at, now);
+    else if (e.type === 'over') showGameOver(e.score);
+  }
 }
 
 function resize(): void {
@@ -316,7 +319,7 @@ function frame(now: number): void {
   }
   const { target } = input.sample();
   while (accumulator >= STEP) {
-    handle(game.step(STEP, target));
+    handle(game.step(STEP, target), now);
     accumulator -= STEP;
   }
   document.body.classList.toggle('playing', calibrating || active);

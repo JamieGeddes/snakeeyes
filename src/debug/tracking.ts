@@ -222,7 +222,7 @@ function renderStats(now: number): void {
   ];
 
   if (face) {
-    const { iris, pose, position, blink } = face;
+    const { iris, pose, head, blink } = face;
     rows.push(
       ['Iris x (image)', iris ? fixed(iris.x) : '-'],
       ['Iris y', iris ? fixed(iris.y) : '-'],
@@ -231,7 +231,7 @@ function renderStats(now: number): void {
       ['Head yaw', pose ? deg(pose.yaw) : '-'],
       ['Head pitch', pose ? deg(pose.pitch) : '-'],
       ['Head roll', pose ? deg(pose.roll) : '-'],
-      ['Head position', position ? position.map((v) => v.toFixed(1)).join(', ') : '-'],
+      ['Head position', head ? head.position.map((v) => v.toFixed(1)).join(', ') : '-'],
     );
   } else {
     rows.push(['Face', 'not found', false]);

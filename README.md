@@ -21,8 +21,8 @@ Open the URL Vite prints (served on `localhost`, which browsers treat as secure 
 ## Playing
 
 1. Click **Start** and allow the camera. The game goes fullscreen.
-2. Keep your head still and follow the 9 calibration dots, then the 4 accuracy dots.
-3. Click **Play**. The snake heads for where you look; look further away to go faster.
+2. Follow the 9 calibration dots with your head still. Then keep looking at the centre dot while you slowly turn, nod and lean towards the screen and back, as prompted. Finally follow the 4 accuracy dots. About 45 s in all, hands-free.
+3. Click **Play**. The snake heads for where you look; look further away to go faster. Normal head movement is fine, and each fruit you eat fine-tunes the calibration.
 
 | Key   | Action        |
 | ----- | ------------- |
@@ -45,7 +45,7 @@ The face model is self-hosted in `public/models/` (see its README for source, ch
 
 ## Gaze check
 
-`/gaze.html` runs the full calibration (9 dots, then 4 to check accuracy) and then shows a marker where it thinks you are looking, with reference crosses to test against. Press R to recalibrate, or C to change camera.
+`/gaze.html` runs the full calibration and then shows a marker where it thinks you are looking, with reference crosses to test against. The result screen compares the current model with the earlier one (which ignored head movement). **Head-move test** (or H in the live view) scores both models on 8 dots while you move your head naturally. Press R to recalibrate, or C to change camera.
 
 ## Scripts
 

@@ -85,6 +85,26 @@ export function headPoseFromMatrix(data: readonly number[]): HeadPose | null {
   };
 }
 
+export type Vec3 = readonly [number, number, number];
+
+/** Head rotation and position in camera space, from MediaPipe's facial transform. */
+export interface HeadTransform {
+  /** 3×3 rotation, row-major, with any scale removed. */
+  readonly rotation: readonly number[];
+  /** Translation of the canonical face origin, in MediaPipe units (roughly cm). */
+  readonly position: Vec3;
+}
+
+/** Splits a column-major 4×4 transform into rotation (scale removed) and position. */
+export function headTransformFromMatrix(data: readonly number[]): HeadTransform | null {
+  if (data.length < 16) return null;
+  const at = (row: number, col: number): number => data[col * 4 + row] ?? 0;
+  const scales = [0, 1, 2].map((c) => Math.hypot(at(0, c), at(1, c), at(2, c)));
+  if (scales.some((s) => s < 1e-9)) return null;
+  const rotation = [0, 1, 2].flatMap((r) => [0, 1, 2].map((c) => at(r, c) / (scales[c] ?? 1)));
+  return { rotation, position: [at(0, 3), at(1, 3), at(2, 3)] };
+}
+
 export interface Category {
   readonly categoryName: string;
   readonly score: number;

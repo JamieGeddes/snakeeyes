@@ -1,6 +1,13 @@
 import { CameraError } from '../camera/camera';
 import { CameraChoice, cameraNote } from '../camera/cameraChoice';
-import { TARGET_ERROR_PX, type GazeModel } from '../gaze/calibration';
+import {
+  evaluateValidation,
+  fitRidgeCalibration,
+  TARGET_ERROR_PX,
+  type GazeModel,
+  type RidgeGazeModel,
+  type ValidationResult,
+} from '../gaze/calibration';
 import { GazeEstimator, type GazeEstimate } from '../gaze/estimator';
 import { toGazeSample } from '../gaze/features';
 import { RateMeter } from '../tracking/stats';
@@ -40,6 +47,8 @@ const picker = new CameraPicker({
 const session = new TrackingSession({ video, onSample, onCameraLost });
 
 let model: GazeModel | null = null;
+/** The latest calibration, plus the earlier ridge model fitted to the same dots for comparison. */
+let calibrated: { model: GazeModel; ridge: RidgeGazeModel | null } | null = null;
 let estimator: GazeEstimator | null = null;
 let estimate: GazeEstimate = { point: null, status: 'no-face' };
 let liveFrame = 0;
@@ -111,6 +120,11 @@ async function calibrate(): Promise<void> {
   showResult(result);
 }
 
+const px = (v: number): string => (Number.isFinite(v) ? `${Math.round(v)}` : '-');
+const perDot = (v: ValidationResult): string =>
+  v.perDotPx.map((e) => (e === null ? '-' : px(e))).join(', ');
+const deg = (r: number): string => `${Math.round((r * 180) / Math.PI)}°`;
+
 function showResult(result: CalibrationResult): void {
   if (!result.ok) {
     overlay.show({
@@ -121,23 +135,57 @@ function showResult(result: CalibrationResult): void {
     });
     return;
   }
-  const { medianErrorPx, perDotPx, passed } = result.validation;
-  const dots = perDotPx.map((e) => (e === null ? '-' : `${Math.round(e)}`)).join(', ');
+  const { validation, model: fitted, sequences } = result;
+  const ridge = fitRidgeCalibration(sequences.calibration, fitted.screen);
+  calibrated = { model: fitted, ridge };
+  const old = ridge ? evaluateValidation(ridge, sequences.validation).medianErrorPx : Infinity;
+  const { passed } = validation;
   overlay.show({
     title: passed ? 'Calibrated' : 'Accuracy is low',
     text:
-      `Median error ${Math.round(medianErrorPx)} px (target ${TARGET_ERROR_PX} px). ` +
-      `Per dot: ${dots} px. Fit error ${Math.round(result.model.cvErrorPx)} px.` +
-      (passed ? '' : ' Recalibrating may help: keep your head still and check the lighting.'),
-    actions: passed
-      ? [
-          { label: 'Continue', run: () => startLive(result.model) },
-          { label: 'Recalibrate', run: () => void calibrate() },
-        ]
-      : [
-          { label: 'Recalibrate', run: () => void calibrate() },
-          { label: 'Continue anyway', run: () => startLive(result.model) },
-        ],
+      `Median error ${px(validation.medianErrorPx)} px (target ${TARGET_ERROR_PX} px). ` +
+      `Per dot: ${perDot(validation)} px. Fit error ${px(fitted.cvErrorPx)} px. ` +
+      `Old model: ${px(old)} px. ` +
+      `Head movement: ${deg(fitted.headRange.yaw)} turn, ${deg(fitted.headRange.pitch)} nod.` +
+      (passed ? '' : ' Recalibrating may help: check the lighting and follow the prompts.'),
+    actions: [
+      ...(passed
+        ? [
+            { label: 'Continue', run: () => startLive(fitted) },
+            { label: 'Recalibrate', run: () => void calibrate() },
+          ]
+        : [
+            { label: 'Recalibrate', run: () => void calibrate() },
+            { label: 'Continue anyway', run: () => startLive(fitted) },
+          ]),
+      { label: 'Head-move test', run: () => void headTest() },
+    ],
+    extra: picker.element,
+  });
+}
+
+/** Follow dots while moving the head naturally; scores the new and old models on the same data. */
+async function headTest(): Promise<void> {
+  const current = calibrated;
+  if (!current) return;
+  stopLive();
+  overlay.hide();
+  document.body.classList.add('playing');
+  const seq = await calibration.runHeadTest();
+  document.body.classList.remove('playing');
+  const fresh = evaluateValidation(current.model, seq);
+  const old = current.ridge ? evaluateValidation(current.ridge, seq) : null;
+  overlay.show({
+    title: 'Head-move test',
+    text:
+      `New model: median ${px(fresh.medianErrorPx)} px (per dot: ${perDot(fresh)}). ` +
+      `Old model: median ${old ? px(old.medianErrorPx) : '-'} px` +
+      (old ? ` (per dot: ${perDot(old)}).` : '.'),
+    actions: [
+      { label: 'Continue', run: () => startLive(current.model) },
+      { label: 'Test again', run: () => void headTest() },
+      { label: 'Recalibrate', run: () => void calibrate() },
+    ],
     extra: picker.element,
   });
 }
@@ -200,7 +248,7 @@ function drawLive(now: number): void {
   ctx.textBaseline = 'top';
   const fps = sampleRate.rate(now).toFixed(0);
   ctx.fillText(
-    `${estimate.status} · ${fps} fps · ${session.delegate ?? ''} · R to recalibrate · C for camera`,
+    `${estimate.status} · ${fps} fps · ${session.delegate ?? ''} · R to recalibrate · H for head-move test · C for camera`,
     16,
     16,
   );
@@ -219,6 +267,7 @@ window.addEventListener('keydown', (e) => {
   if (e.target instanceof HTMLSelectElement || !session.active || calibration.running) return;
   if (e.code === 'KeyR') void calibrate();
   else if (e.code === 'KeyC' && model && !overlay.visible) showCameraMenu();
+  else if (e.code === 'KeyH' && model && !overlay.visible) void headTest();
 });
 
 resize();

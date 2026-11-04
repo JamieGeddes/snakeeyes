@@ -1,12 +1,12 @@
 import type { NormalizedLandmark } from '@mediapipe/tasks-vision';
 import type { Delegate } from './faceTracker';
-import type { HeadPose, IrisPosition } from './features';
+import type { HeadPose, HeadTransform, IrisPosition } from './features';
 
 export interface FaceData {
   readonly iris: IrisPosition | null;
   readonly pose: HeadPose | null;
-  /** Head translation from the transform matrix (MediaPipe units, roughly cm). */
-  readonly position: readonly [number, number, number] | null;
+  /** Head rotation and position in camera space (MediaPipe units, roughly cm). */
+  readonly head: HeadTransform | null;
   readonly blink: { readonly left: number; readonly right: number };
   /** Only sent when requested, for debug drawing. */
   readonly landmarks?: NormalizedLandmark[];
