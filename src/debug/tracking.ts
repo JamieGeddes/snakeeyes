@@ -1,11 +1,11 @@
 import { DrawingUtils, FaceLandmarker } from '@mediapipe/tasks-vision';
-import { CameraError, openCamera, stopCamera } from '../camera/camera';
+import { CameraError } from '../camera/camera';
 import { CameraChoice, cameraNote } from '../camera/cameraChoice';
 import { safeStorage } from '../storage';
 import { CameraPicker } from '../ui/cameraPicker';
 import type { FaceData, TrackingSample } from '../tracking/protocol';
 import { RateMeter, WindowStats } from '../tracking/stats';
-import { TrackerClient } from '../tracking/trackerClient';
+import { TrackingSession } from '../tracking/session';
 
 const JITTER_MS = 3000;
 const RANGE_MS = 6000;
@@ -47,15 +47,23 @@ const picker = new CameraPicker({
     cameraChoice.save(id);
     void start();
   },
-  onRefresh: (cameras) => picker.setNote(cameraNote(cameras, cameraChoice.saved, cameraInUse)),
+  onRefresh: (cameras) =>
+    picker.setNote(cameraNote(cameras, cameraChoice.saved, session.cameraInUse)),
+});
+const session = new TrackingSession({
+  video,
+  onSample,
+  landmarks: true,
+  onCameraLost: () => {
+    resetView();
+    status.textContent = 'The camera was disconnected. Pick a camera or press Start camera.';
+    startButton.disabled = false;
+    void picker.refresh();
+  },
 });
 cameraSlot.append(picker.element);
 picker.element.hidden = true;
 
-let trackerReady: Promise<TrackerClient> | null = null;
-let tracker: TrackerClient | null = null;
-let stream: MediaStream | null = null;
-let cameraInUse: string | null = null;
 let lastFace: FaceData | null = null;
 let lastStatsAt = 0;
 
@@ -70,26 +78,11 @@ async function start(): Promise<void> {
   startButton.disabled = true;
   picker.disabled = true;
   measuring = null;
-  closeCamera();
+  resetView();
   status.textContent = 'Loading face model and starting camera…';
   try {
-    trackerReady ??= TrackerClient.create({ landmarks: true });
-    const [client, camera] = await Promise.all([
-      trackerReady,
-      openCamera(video, cameraChoice.saved),
-    ]);
-    tracker = client;
-    stream = camera.stream;
-    cameraInUse = camera.deviceId;
-    camera.stream.getVideoTracks()[0]?.addEventListener('ended', () => {
-      if (stream !== camera.stream) return;
-      closeCamera();
-      status.textContent = 'The camera was disconnected. Pick a camera or press Start camera.';
-      startButton.disabled = false;
-      void picker.refresh();
-    });
+    await session.open(cameraChoice.saved);
   } catch (e) {
-    if (!tracker) trackerReady = null;
     status.textContent =
       e instanceof CameraError ? e.message : `Could not start tracking: ${String(e)}`;
     startButton.disabled = false;
@@ -107,7 +100,6 @@ async function start(): Promise<void> {
   jitterButton.disabled = false;
   rangeButton.disabled = false;
   picker.disabled = false;
-  tracker.start(video, onSample);
   await showPicker();
 }
 
@@ -116,11 +108,8 @@ async function showPicker(): Promise<void> {
   picker.element.hidden = false;
 }
 
-function closeCamera(): void {
-  tracker?.stop();
-  if (stream) stopCamera(stream);
-  stream = null;
-  cameraInUse = null;
+/** Clears the view while no camera is running. */
+function resetView(): void {
   lastFace = null;
   jitterButton.disabled = true;
   rangeButton.disabled = true;
@@ -219,11 +208,11 @@ const deg = (r: number): string => `${((r * 180) / Math.PI).toFixed(1)}°`;
 
 function renderStats(now: number): void {
   const face = lastFace;
-  const settings = stream?.getVideoTracks()[0]?.getSettings();
+  const settings = session.stream?.getVideoTracks()[0]?.getSettings();
   const fps = detectRate.rate(now);
   const p95 = inferenceMs.percentile(0.95);
   const rows: Row[] = [
-    ['Delegate', tracker?.delegate ?? '-'],
+    ['Delegate', session.delegate ?? '-'],
     ['Runs in', 'worker'],
     ['Camera', `${video.videoWidth}×${video.videoHeight} @ ${settings?.frameRate ?? '?'} fps`],
     ['Detection rate', `${fps.toFixed(0)} fps`, fps >= 25],
