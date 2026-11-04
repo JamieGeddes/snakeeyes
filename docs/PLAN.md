@@ -8,7 +8,8 @@
 | Display         | Fullscreen play area                                                                                                  |
 | Movement        | Free steering towards gaze point; speed scales with gaze distance from the head (small minimum so it can almost stop) |
 | Gaze marker     | Faint marker shown where the player is looking                                                                        |
-| Calibration     | Every session: 9-point calibration then 4-point validation                                                            |
+| Calibration     | Every session: 9 dots, hands-free (2.5 s each, first 0.8 s ignored), then 4 validation dots; short dots retried once  |
+| Failed check    | Above 150 px median error: offer recalibrate or continue anyway                                                       |
 | Accuracy target | Median error under 150 px after calibration (go/no-go checkpoint)                                                     |
 | Round           | Timed, 2 minutes (`roundSeconds`); 3 s countdown on start and resume                                                  |
 | Score           | Fruit currently in the snake; a tail trim removes the lost fruit's points                                             |
@@ -37,9 +38,9 @@ WebGazer.js was rejected: GPL-3.0 and less accurate than MediaPipe iris landmark
 
 ## Gaze pipeline
 
-1. `getUserMedia` at 640x480; Face Landmarker per video frame (478 landmarks, head transform, blink blendshapes).
+1. `getUserMedia` at 640x480; frames go to Face Landmarker in a Web Worker (478 landmarks, head transform, blink blendshapes). Detection takes ~15 ms, which would otherwise stall 60 fps rendering.
 2. Features: per-eye iris position normalised to eye corners and lids, plus head yaw/pitch/roll.
-3. Calibration fits features to screen x,y; validation reports error and offers recalibration.
+3. Calibration takes the median feature vector per dot and fits ridge regression to screen x,y (lambda by leave-one-dot-out cross-validation). Features: iris x/y with centred quadratic terms, eye openness, head yaw and pitch. Validation reports median error of filtered gaze.
 4. One Euro filter for smoothing; frames during blinks are discarded.
 5. Low confidence or no face for ~0.5 s triggers auto-pause.
 

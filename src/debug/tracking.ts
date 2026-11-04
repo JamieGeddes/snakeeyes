@@ -1,8 +1,8 @@
-import { DrawingUtils, FaceLandmarker, type FaceLandmarkerResult } from '@mediapipe/tasks-vision';
+import { DrawingUtils, FaceLandmarker } from '@mediapipe/tasks-vision';
 import { CameraError, startCamera } from '../camera/camera';
-import { createFaceTracker, type FaceTracker } from '../tracking/faceTracker';
-import { blendshapeScore, headPoseFromMatrix, irisPosition } from '../tracking/features';
+import type { FaceData, TrackingSample } from '../tracking/protocol';
 import { RateMeter, WindowStats } from '../tracking/stats';
+import { TrackerClient } from '../tracking/trackerClient';
 
 const JITTER_MS = 3000;
 const RANGE_MS = 6000;
@@ -37,9 +37,9 @@ type Measurement = { kind: 'jitter' | 'range'; until: number; x: WindowStats; y:
 let measuring: Measurement | null = null;
 const results: { jitter?: { x: number; y: number }; range?: { x: number; y: number } } = {};
 
-let tracker: FaceTracker | null = null;
+let tracker: TrackerClient | null = null;
 let stream: MediaStream | null = null;
-let lastResult: FaceLandmarkerResult | null = null;
+let lastFace: FaceData | null = null;
 let lastStatsAt = 0;
 
 startButton.addEventListener('click', () => {
@@ -52,7 +52,10 @@ async function start(): Promise<void> {
   startButton.disabled = true;
   status.textContent = 'Loading face model and starting camera…';
   try {
-    [tracker, stream] = await Promise.all([createFaceTracker(), startCamera(video)]);
+    [tracker, stream] = await Promise.all([
+      TrackerClient.create({ landmarks: true }),
+      startCamera(video),
+    ]);
   } catch (e) {
     status.textContent =
       e instanceof CameraError ? e.message : `Could not start tracking: ${String(e)}`;
@@ -64,40 +67,36 @@ async function start(): Promise<void> {
   status.textContent = 'Tracking.';
   jitterButton.disabled = false;
   rangeButton.disabled = false;
-  video.requestVideoFrameCallback(onFrame);
+  tracker.start(video, onSample);
 }
 
-function onFrame(): void {
-  if (!tracker) return;
-  const t0 = performance.now();
-  const result = tracker.landmarker.detectForVideo(video, t0);
+function onSample(sample: TrackingSample): void {
   const t1 = performance.now();
-  lastResult = result;
+  const face = sample.face;
+  lastFace = face;
 
   detectRate.tick(t1);
-  inferenceMs.add(t1, t1 - t0);
-  const face = result.faceLandmarks[0];
+  inferenceMs.add(t1, sample.inferenceMs);
   facePresence.add(t1, face ? 1 : 0);
 
-  const iris = face ? irisPosition(face, video.videoWidth / video.videoHeight) : null;
+  const iris = face?.iris;
   if (measuring && iris) {
     measuring.x.add(t1, iris.x);
     measuring.y.add(t1, iris.y);
   }
   if (measuring && t1 >= measuring.until) finishMeasurement();
 
-  draw(result);
+  draw(face);
   if (t1 - lastStatsAt >= STATS_INTERVAL_MS) {
     lastStatsAt = t1;
     renderStats(t1);
   }
-  video.requestVideoFrameCallback(onFrame);
 }
 
-function draw(result: FaceLandmarkerResult): void {
+function draw(data: FaceData | null): void {
   if (!ctx) return;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  const face = result.faceLandmarks[0];
+  const face = data?.landmarks;
   if (!face) return;
   const eyeStyle = { color: 'rgba(126, 240, 192, 0.8)', lineWidth: 1 };
   const irisStyle = { color: '#ffb36b', lineWidth: 1.5 };
@@ -162,13 +161,13 @@ const fixed = (v: number, digits = 3): string => v.toFixed(digits);
 const deg = (r: number): string => `${((r * 180) / Math.PI).toFixed(1)}°`;
 
 function renderStats(now: number): void {
-  const result = lastResult;
-  const face = result?.faceLandmarks[0];
+  const face = lastFace;
   const settings = stream?.getVideoTracks()[0]?.getSettings();
   const fps = detectRate.rate(now);
   const p95 = inferenceMs.percentile(0.95);
   const rows: Row[] = [
     ['Delegate', tracker?.delegate ?? '-'],
+    ['Runs in', 'worker'],
     ['Camera', `${video.videoWidth}×${video.videoHeight} @ ${settings?.frameRate ?? '?'} fps`],
     ['Detection rate', `${fps.toFixed(0)} fps`, fps >= 25],
     ['Inference mean', `${inferenceMs.mean.toFixed(1)} ms`],
@@ -176,30 +175,17 @@ function renderStats(now: number): void {
     ['Face found (5 s)', `${(facePresence.mean * 100).toFixed(0)}%`, facePresence.mean >= 0.95],
   ];
 
-  if (face && result) {
-    const iris = irisPosition(face, video.videoWidth / video.videoHeight);
-    const blend = result.faceBlendshapes[0]?.categories ?? [];
-    const matrix = result.facialTransformationMatrixes[0]?.data ?? [];
-    const pose = headPoseFromMatrix(matrix);
-    const translation = [matrix[12], matrix[13], matrix[14]].map((v) => (v ?? 0).toFixed(1));
-    // In column-major layout the bottom row (3, 7, 11) is zero and translation sits in 12 to 14.
-    const columnMajor =
-      matrix.length >= 16 &&
-      Math.abs(matrix[14] ?? 0) > 1 &&
-      [3, 7, 11].every((i) => Math.abs(matrix[i] ?? 0) < 1e-3);
+  if (face) {
+    const { iris, pose, position, blink } = face;
     rows.push(
       ['Iris x (image)', iris ? fixed(iris.x) : '-'],
       ['Iris y', iris ? fixed(iris.y) : '-'],
       ['Eye openness', iris ? fixed(iris.openness) : '-'],
-      [
-        'Blink L / R',
-        `${fixed(blendshapeScore(blend, 'eyeBlinkLeft'), 2)} / ${fixed(blendshapeScore(blend, 'eyeBlinkRight'), 2)}`,
-      ],
+      ['Blink L / R', `${fixed(blink.left, 2)} / ${fixed(blink.right, 2)}`],
       ['Head yaw', pose ? deg(pose.yaw) : '-'],
       ['Head pitch', pose ? deg(pose.pitch) : '-'],
       ['Head roll', pose ? deg(pose.roll) : '-'],
-      ['Head position', translation.join(', ')],
-      ['Matrix layout', columnMajor ? 'column-major' : 'unexpected', columnMajor],
+      ['Head position', position ? position.map((v) => v.toFixed(1)).join(', ') : '-'],
     );
   } else {
     rows.push(['Face', 'not found', false]);

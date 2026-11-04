@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SnakeEyes: gaze check</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <canvas id="game" aria-label="Gaze check"></canvas>
+    <video id="video" playsinline muted hidden></video>
+    <div id="overlay" class="overlay" role="dialog" aria-live="polite" hidden>
+      <div class="panel">
+        <h1 data-title></h1>
+        <p data-text></p>
+        <div class="actions" data-actions></div>
+      </div>
+    </div>
+    <script type="module" src="/src/debug/gaze.ts"></script>
+  </body>
+</html>

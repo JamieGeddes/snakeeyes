@@ -49,7 +49,7 @@ function pause(): void {
   overlay.show({
     title: 'Paused',
     text: 'Press Space or the button to carry on.',
-    action: { label: 'Resume', run: resume },
+    actions: [{ label: 'Resume', run: resume }],
   });
 }
 
@@ -65,7 +65,7 @@ function showReady(): void {
       ? {
           title: 'SnakeEyes',
           text: 'Debug mode: steer with the mouse. Eat fruit to grow; crossing yourself trims your tail. Two minutes on the clock.',
-          action: { label: 'Start', run: start },
+          actions: [{ label: 'Start', run: start }],
         }
       : {
           title: 'SnakeEyes',
@@ -81,7 +81,7 @@ function handle(events: readonly GameEvent[]): void {
     overlay.show({
       title: "Time's up",
       text: isBest ? `New best: ${e.score}!` : `You scored ${e.score}. Best: ${highScore.best}.`,
-      action: { label: 'Play again', run: start },
+      actions: [{ label: 'Play again', run: start }],
     });
   }
 }
